@@ -1,0 +1,15 @@
+{
+  "name": "what-would-hedge-this-deck",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node render.cjs && node build-html.cjs",
+    "build:html": "node build-html.cjs"
+  },
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.64.0",
+    "pptxgenjs": "4.0.1",
+    "three": "0.186.1"
+  }
+}
