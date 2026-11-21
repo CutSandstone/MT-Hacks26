@@ -2,16 +2,12 @@ import examples from './examples.json' with { type: 'json' };
 
 export const CASES = examples;
 
-// Reusable custom templates. They share the case shape the app renders, but ship with
-// blank inputs (no invented real-world numbers), no company match, and no real tickers —
-// every outcome is an explicitly synthetic paper scenario. Quantity may default to 1 so a
-// user can enter a single total.
+// Reusable templates for generic expense, income, and foreign-bill calculations.
 export const CUSTOM_CASES = [
   {
     id: 'expense',
     title: 'A planned expense whose price could jump',
     samplePrompt: 'What if the price of flour rises before my bakery buys its next shipment?',
-    keywords: [],
     followUp: {
       question: 'How many units will you buy, and what prices are you budgeting and stress-testing? Use a quantity of 1 to compare whole-period totals.',
       kind: 'fields',
@@ -49,7 +45,6 @@ export const CUSTOM_CASES = [
     id: 'income',
     title: 'Income that depends on a price holding up',
     samplePrompt: 'What if my teaching fee falls before I book next month’s classes?',
-    keywords: [],
     followUp: {
       question: 'How many units will you sell, and what prices are you expecting and stress-testing? Use a quantity of 1 to compare whole-period totals.',
       kind: 'fields',
@@ -87,7 +82,6 @@ export const CUSTOM_CASES = [
     id: 'fx-bill',
     title: 'A bill due in a foreign currency',
     samplePrompt: 'I owe a supplier euros in March. What if the euro rises before I pay?',
-    keywords: [],
     followUp: {
       question: 'How much is due, and which exchange rates are you budgeting and stress-testing? Enter both rates in foreign currency units per US dollar.',
       kind: 'fields',
@@ -133,9 +127,6 @@ export const ASSUMPTIONS = [
   'Paper positions use unborrowed funds.',
   'Cash earns zero interest by assumption.',
   'Each stock outcome is hypothetical — assumed returns are invented for the simulation.',
-  'Custom expense, income, and foreign-bill scenarios pair your own numbers with fictional paper positions — there are no real tickers or sourced facts behind them.',
   'The currency benchmark uses your two exchange rates and assumes zero interest and conversion fees.',
   'This app asks for no financial account, places no trades, and gives no personalized buy list.'
 ];
-
-export const SCOPE_MESSAGE = 'Describe one expense that could rise, one payment you might earn less from, or one bill due in a foreign currency. Include what could change and when. You can also choose an example below.';

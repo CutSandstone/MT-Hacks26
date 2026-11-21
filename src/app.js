@@ -1,83 +1,117 @@
 import {
   careerImpact, commutingImpact, tuitionImpactYen, tuitionImpactFixedDollar,
-  unitCashImpact, foreignBillImpact, positionGain, yenBenchmarkReturnDecimal, yenBenchmarkGain,
-  combinedChange, breakEvenPosition, breakEvenReturn, classifyOutcome, validateField, roundCents,
+  positionGain, yenBenchmarkReturnDecimal, combinedChange, validateField, roundCents,
 } from './engine.js';
-import { CASES, CUSTOM_CASES, ASSUMPTIONS, SCOPE_MESSAGE } from './fixtures.js';
-import { matchSample, suggestCases } from './matcher.js';
-import { esc, fmtUSD, fmtSignedUSD, fmtPct, outcomeText, fieldHTML } from './ui.js';
-import { inferenceStatus, providerLabel, interpretDecision, askAbout } from './ai.js';
-
-const ALL_CASES = [...CASES, ...CUSTOM_CASES];
+import { CASES, ASSUMPTIONS } from './fixtures.js';
+import { entryHTML } from './entry.js';
+import { esc, fmtUSD, fmtSignedUSD, fieldHTML } from './ui.js';
 
 const app = document.getElementById('app');
 
-const CASH_KINDS = new Set(['yen-cash', 'foreign-cash']);
-const isCashKind = k => CASH_KINDS.has(k);
-
-const state = {
-  screen: 'entry',          // 'entry' | 'confirm' | 'result'
-  caseId: null,
-  promptText: '',
-  promptEcho: '',           // typed text shown back on confirm/result
-  entryMessage: null,       // 'ambiguous' | 'unsupported' | 'unavailable'
-  suggestions: [],          // case ids offered as manual picks after a miss
-  followUpChoice: null,
-  inputs: {},               // name -> raw string
-  supplied: new Set(),      // input names the model extracted from the text
-  errors: {},               // name -> message
-  scenarioId: null,
-  position: '1000',
-  returnPct: '',            // raw percent string for stock/paper scenarios
-  returnUnknown: false,
-  showFailure: false,
-  inference: { provider: 'devin', configured: false, model: '' },
-  matchSource: null,        // 'ai' | 'sample'
-  matching: false,
-  matchSeq: 0,              // stale-response guard for /api/interpret
-  horizon: '',              // editable period label for custom templates
-  unitLabel: '',            // editable currency/unit label for custom templates
-  ask: { question: '', answer: null, loading: false },
+const QUESTIONS = {
+  extraMonths: 'How many extra months might it take to land a cybersecurity job?',
+  cyberMonthlyPay: 'How much do you expect to earn per month in cybersecurity?',
+  alternativeMonthlyPay: 'How much would you earn per month in another job while you wait?',
+  annualMiles: 'How many miles will you drive this year?',
+  mpg: 'How many miles can your car drive on one gallon of gas?',
+  budgetPrice: 'What do you expect to pay for a gallon of gas?',
+  scenarioPrice: 'What price per gallon do you want to test?',
+  yenDue: 'How much tuition is due in yen?',
+  budgetRate: 'How many yen do you expect to get for one US dollar?',
+  scenarioRate: 'How many yen per US dollar do you want to test?',
+  fixedBillUsd: 'How much tuition is due in US dollars?',
+  scenarioMiles: 'How many miles would you drive at that higher price?',
+  yenHeld: 'How much of the bill have you already set aside in yen?',
+  replacementMonthlyPay: 'How much would you earn per month in the career you switch to?',
+  switchYears: 'How many years of pay do you want to compare?',
+  stockAmount: 'How much would you use for a hypothetical stock position?',
+  stockSwitchReturn: 'What stock return would you test if your cybersecurity role disappears?',
+  stockStayReturn: 'What stock return would you test if your cybersecurity role remains?',
+  stockFuelReturn: 'What stock return would you test if fuel prices rise and refining margins improve?',
+  stockStableFuelReturn: 'What stock return would you test if fuel prices stay the same?',
 };
 
-const caseById = id => ALL_CASES.find(c => c.id === id);
-const scenarioById = (c, id) => c.scenarios.find(s => s.id === id);
-const isFixedUsd = c => c.id === 'yen' && state.followUpChoice === 'usd-invoice';
-const isCustom = c => !!c && !c.company;
-const periodText = c => (isCustom(c) ? (state.horizon || c.period) : c.period);
+const STOCK_AMOUNT = { name: 'stockAmount', label: 'Hypothetical stock position', default: 1000, unit: '$' };
 
-function defaultUnitLabel(c) {
-  if (!c || c.company) return '';
-  const key = c.impactType === 'fx-bill' ? 'foreignDue' : 'quantity';
-  const f = c.inputs.find(x => x.name === key);
-  return (f && f.unit) || (c.impactType === 'fx-bill' ? 'foreign currency' : 'units');
-}
+const EXTRA_FIELDS = {
+  cyber: [
+    { name: 'replacementMonthlyPay', label: 'Replacement career pay', default: 3000, unit: 'US dollars per month' },
+    { name: 'switchYears', label: 'Pay comparison period', default: 5, unit: 'years' },
+    STOCK_AMOUNT,
+    { name: 'stockSwitchReturn', label: 'Stock return if role disappears', default: 20, unit: '%' },
+    { name: 'stockStayReturn', label: 'Stock return if role remains', default: -10, unit: '%' },
+  ],
+  car: [
+    { name: 'scenarioMiles', label: 'Miles at the higher price', default: '', unit: 'miles' },
+    STOCK_AMOUNT,
+    { name: 'stockFuelReturn', label: 'Stock return if fuel gets more expensive', default: 15, unit: '%' },
+    { name: 'stockStableFuelReturn', label: 'Stock return if fuel prices stay the same', default: -10, unit: '%' },
+  ],
+  yen: [{ name: 'yenHeld', label: 'Tuition already set aside', default: 0, unit: '¥' }],
+};
 
-function initCase(caseId) {
-  const c = caseById(caseId);
-  state.caseId = caseId;
-  state.followUpChoice = null;
+const CHOICE_STEPS = {
+  careerRisk: {
+    id: 'careerRisk', label: 'Career risk', title: 'What are you worried could happen to your cybersecurity career?',
+    options: [{ id: 'delay', label: 'It takes longer to get a job' }, { id: 'switch', label: 'My role disappears and I have to switch careers' }],
+  },
+  backupPay: {
+    id: 'backupPay', label: 'Income while waiting', title: 'Would you earn money in another job while you wait?',
+    options: [{ id: 'yes', label: 'Yes, I would have another paycheck' }, { id: 'no', label: 'No, I would not earn anything' }],
+  },
+  driving: {
+    id: 'driving', label: 'Driving plan', title: 'Could you drive fewer miles if gas gets more expensive?',
+    options: [{ id: 'less', label: 'Yes, I could drive less' }, { id: 'same', label: 'No, my mileage would stay the same' }],
+  },
+  savings: {
+    id: 'savings', label: 'Yen already set aside', title: 'Have you already set aside any of this bill in yen?',
+    options: [{ id: 'yes', label: 'Yes, I already have some yen for it' }, { id: 'no', label: 'No, I still need to buy the yen' }],
+  },
+  fuelDriver: {
+    id: 'fuelDriver', label: 'Reason fuel prices rise', title: 'What kind of fuel-price increase do you want to test?',
+    options: [
+      { id: 'tight-supply', label: 'Tight gasoline supply lets refiners earn more' },
+      { id: 'other', label: 'A local tax, fee, or another cause' },
+    ],
+  },
+};
+
+const BRANCH_FIELDS = new Set(['extraMonths', 'scenarioPrice', 'scenarioMiles', 'yenDue', 'yenHeld',
+  'replacementMonthlyPay', 'stockAmount']);
+
+const OUTCOME_LABELS = {
+  cyber: ['Hiring is delayed', 'Hiring stays on schedule'],
+  car: ['Fuel price changes', 'Fuel price stays the same'],
+  yen: ['Yen exchange rate changes', 'Yen exchange rate stays the same'],
+};
+
+const state = {
+  screen: 'entry',          // 'entry' | 'survey' | 'result'
+  caseId: null,
+  questionIndex: 0,
+  choices: {},
+  inputs: {},               // name -> raw string
+  errors: {},               // name -> message
+  position: null,
+  settingsOpen: false,
+};
+
+const caseById = id => CASES.find(c => c.id === id);
+const isFixedUsd = c => c.id === 'yen' && state.choices.currency === 'usd-invoice';
+const isCareerSwitch = c => c.id === 'cyber' && state.choices.careerRisk === 'switch';
+
+function initCase(c) {
+  state.caseId = c.id;
+  state.choices = {};
   state.inputs = {};
   for (const f of c.inputs) state.inputs[f.name] = String(f.default);
   if (c.fixedMode) for (const f of c.fixedMode.inputs) state.inputs[f.name] = String(f.default);
-  if (c.followUp.inputs) for (const f of c.followUp.inputs) state.inputs[f.name] = String(f.default);
-  state.supplied = new Set();
+  for (const f of EXTRA_FIELDS[c.id]) state.inputs[f.name] = String(f.default);
   state.errors = {};
-  state.showFailure = false;
-  state.scenarioId = c.scenarios[0].id;
-  state.position = String(c.defaultPosition);
-  const first = c.scenarios[0];
-  state.returnPct = String(first.returnPct === 'calculated' ? '' : first.returnPct);
-  state.returnUnknown = false;
-  state.screen = 'confirm';
-  state.entryMessage = null;
-  state.suggestions = [];
-  state.matching = false;
-  state.matchSource = null;
-  state.promptEcho = '';
-  state.horizon = c.period || '';
-  state.unitLabel = defaultUnitLabel(c);
-  state.ask = { question: '', answer: null, loading: false };
+  state.position = null;
+  state.settingsOpen = false;
+  state.questionIndex = 0;
+  state.screen = 'survey';
 }
 
 function num(name) {
@@ -85,476 +119,339 @@ function num(name) {
   return Number.isNaN(v) ? NaN : v;
 }
 
-function activeInputs(c) {
-  return isFixedUsd(c) ? c.fixedMode.inputs : c.inputs;
+function remainingYen() {
+  const held = state.choices.savings === 'yes' ? num('yenHeld') : 0;
+  return Math.max(0, num('yenDue') - held);
 }
 
-// Display unit for a field; custom templates let the user rename the unit/currency.
-function displayUnit(c, f) {
-  if (!isCustom(c)) return f.unit;
-  const u = state.unitLabel || f.unit;
-  if (c.impactType === 'fx-bill') {
-    if (f.name === 'foreignDue') return u;
-    if (f.name === 'budgetRate' || f.name === 'scenarioRate') return `${u} per US dollar`;
+function surveyFlow(c) {
+  const number = name => ({
+    field: [...c.inputs, ...(c.fixedMode?.inputs || []), ...EXTRA_FIELDS[c.id]].find(f => f?.name === name),
+  });
+  const { choices } = state;
+  if (c.id === 'cyber') {
+    const steps = [CHOICE_STEPS.careerRisk];
+    if (!choices.careerRisk) return { steps, pending: true };
+    if (isCareerSwitch(c)) {
+      steps.push(number('cyberMonthlyPay'), number('replacementMonthlyPay'), number('switchYears'));
+      if (num('cyberMonthlyPay') > num('replacementMonthlyPay')) {
+        steps.push(number('stockAmount'));
+        if (num('stockAmount') > 0) steps.push(number('stockSwitchReturn'), number('stockStayReturn'));
+      }
+      return { steps, pending: false };
+    }
+    steps.push(number('extraMonths'));
+    if (num('extraMonths') === 0) return { steps, pending: false };
+    steps.push(number('cyberMonthlyPay'), CHOICE_STEPS.backupPay);
+    if (choices.backupPay === 'yes') steps.push(number('alternativeMonthlyPay'));
+    return { steps, pending: !choices.backupPay };
   }
-  if (f.name === 'quantity') return u;
-  if (f.name === 'baselinePrice' || f.name === 'stressPrice') return `USD per ${u}`;
-  return f.unit;
+  if (c.id === 'car') {
+    const steps = ['annualMiles', 'mpg', 'budgetPrice', 'scenarioPrice'].map(number);
+    if (num('scenarioPrice') <= num('budgetPrice')) return { steps, pending: false };
+    steps.push(CHOICE_STEPS.driving);
+    if (!choices.driving) return { steps, pending: true };
+    if (choices.driving === 'less') steps.push(number('scenarioMiles'));
+    if (roundCents(computeImpact(c)) < 0) {
+      steps.push(CHOICE_STEPS.fuelDriver);
+      if (!choices.fuelDriver) return { steps, pending: true };
+      if (choices.fuelDriver === 'tight-supply') {
+        steps.push(number('stockAmount'));
+        if (num('stockAmount') > 0) steps.push(number('stockFuelReturn'), number('stockStableFuelReturn'));
+      }
+    }
+    return { steps, pending: false };
+  }
+  const steps = [{ id: 'currency', label: 'Bill currency', title: c.followUp.question, options: c.followUp.options }];
+  if (!choices.currency) return { steps, pending: true };
+  if (isFixedUsd(c)) return { steps: [...steps, number('fixedBillUsd')], pending: false };
+  steps.push(number('yenDue'));
+  if (num('yenDue') === 0) return { steps, pending: false };
+  steps.push(CHOICE_STEPS.savings);
+  if (!choices.savings) return { steps, pending: true };
+  if (choices.savings === 'yes') steps.push(number('yenHeld'));
+  if (remainingYen() > 0) steps.push(number('budgetRate'), number('scenarioRate'));
+  return { steps, pending: false };
 }
 
-function computeImpact(c, scenario) {
+function computeImpact(c) {
   if (isFixedUsd(c)) return tuitionImpactFixedDollar();
-  const g = n => num(n);
-  const over = (scenario && scenario.impactOverride) || {};
-  const val = n => (n in over ? over[n] : g(n));
   switch (c.impactType) {
-    case 'career': return careerImpact(val('extraMonths'), val('monthlyEarningsDiff'));
-    case 'commute': return commutingImpact(val('annualMiles'), val('mpg'), val('budgetPrice'), val('scenarioPrice'));
-    case 'tuition-yen': return tuitionImpactYen(val('yenDue'), val('budgetRate'), val('scenarioRate'));
-    case 'expense': return unitCashImpact(val('quantity'), val('baselinePrice'), val('stressPrice'), false);
-    case 'income': return unitCashImpact(val('quantity'), val('baselinePrice'), val('stressPrice'), true);
-    case 'fx-bill': return foreignBillImpact(val('foreignDue'), val('budgetRate'), val('scenarioRate'));
+    case 'career': {
+      if (isCareerSwitch(c)) {
+        return careerImpact(12 * num('switchYears'), num('cyberMonthlyPay') - num('replacementMonthlyPay'));
+      }
+      const delay = num('extraMonths');
+      const backupPay = state.choices.backupPay === 'yes' ? num('alternativeMonthlyPay') : 0;
+      return delay === 0 ? 0 : careerImpact(delay, num('cyberMonthlyPay') - backupPay);
+    }
+    case 'commute': {
+      const miles = num('annualMiles');
+      const mpg = num('mpg');
+      const budget = num('budgetPrice');
+      const price = num('scenarioPrice');
+      const impact = commutingImpact(miles, mpg, budget, price);
+      return price > budget && state.choices.driving === 'less'
+        ? impact + (miles - num('scenarioMiles')) / mpg * price : impact;
+    }
+    case 'tuition-yen': {
+      const remaining = remainingYen();
+      return remaining === 0 ? 0 : tuitionImpactYen(remaining, num('budgetRate'), num('scenarioRate'));
+    }
     default: return 0;
   }
 }
 
-function computeGain(c, scenario) {
-  const position = parseFloat(state.position);
-  if (Number.isNaN(position)) return null;
-  if (isCashKind(scenario.kind)) {
-    return yenBenchmarkGain(position, num('budgetRate'), num('scenarioRate'));
-  }
-  if (state.returnUnknown) return positionGain(position, null);
-  const r = parseFloat(state.returnPct);
-  if (Number.isNaN(r)) return null;
-  return positionGain(position, r / 100);
-}
-
-function currentReturnDecimal(c, scenario) {
-  if (isCashKind(scenario.kind)) {
-    const b = num('budgetRate'), s = num('scenarioRate');
-    if (b > 0 && s > 0) return yenBenchmarkReturnDecimal(b, s);
-    return null;
-  }
-  if (state.returnUnknown) return null;
-  const r = parseFloat(state.returnPct);
-  return Number.isNaN(r) ? null : r / 100;
-}
-
-function validateAll(c) {
-  state.errors = {};
-  for (const f of activeInputs(c)) {
-    const msg = validateField(f.name, num(f.name));
-    if (msg) state.errors[f.name] = msg;
-  }
-  const posMsg = validateField('position', parseFloat(state.position));
-  if (posMsg) state.errors.position = posMsg;
-  const sc = scenarioById(c, state.scenarioId);
-  if (sc && !isCashKind(sc.kind) && !state.returnUnknown) {
-    const rMsg = validateField('returnPct', parseFloat(state.returnPct));
-    if (rMsg) state.errors.returnPct = rMsg;
-  }
-  return Object.keys(state.errors).length === 0;
-}
-
-// ---------- shared fragments ----------
-
-function sourceNote() {
-  if (state.matchSource === 'ai') return `Matched by ${providerLabel(state.inference)}.`;
-  if (state.matchSource === 'sample') return 'Matched to a sample prompt word-for-word.';
-  return '';
-}
-
-function fieldsHTML(c) {
-  return activeInputs(c).map(f => {
-    const label = state.supplied.has(f.name) ? `${f.label} · from your text` : f.label;
-    return fieldHTML({
-      name: f.name, label, unit: displayUnit(c, f),
-      value: state.inputs[f.name], error: state.errors[f.name],
-    });
-  }).join('');
-}
-
-function echoHTML() {
-  return state.promptEcho ? `<div class="note echo">“${esc(state.promptEcho)}”</div>` : '';
-}
-
-function customMetaFields(c) {
-  if (!isCustom(c)) return '';
-  const unitPrompt = c.impactType === 'fx-bill' ? 'Foreign currency label' : 'Unit label for the quantity';
-  return `<div class="field"><label for="f-horizon">Measurement period</label>
-      <input id="f-horizon" data-field="horizon" type="text" value="${esc(state.horizon)}"></div>
-    <div class="field"><label for="f-unitLabel">${unitPrompt}</label>
-      <input id="f-unitLabel" data-field="unitLabel" type="text" value="${esc(state.unitLabel)}"></div>`;
-}
-
-// ---------- screens ----------
-
-function renderEntry() {
-  const pickBtn = c =>
-    `<li><button data-action="pick" data-case="${c.id}">${esc(c.samplePrompt)}</button></li>`;
-  const curated = CASES.map(pickBtn).join('');
-  const templates = CUSTOM_CASES.map(c =>
-    `<li><button data-action="pick" data-case="${c.id}">${esc(c.samplePrompt)}</button></li>`).join('');
-  const chips = state.suggestions.map(id => {
-    const c = caseById(id);
-    return c ? `<button class="chip" data-action="pick" data-case="${c.id}">${esc(c.title)}</button>` : '';
-  }).join('');
-
-  let msg = '';
-  if (state.entryMessage === 'ambiguous') {
-    msg = `<div class="note">Which single expense, income stream, or foreign bill could change? Describe that cash flow and the period you want to test.</div>`;
-  } else if (state.entryMessage === 'unsupported') {
-    msg = `<div class="note warn">${esc(SCOPE_MESSAGE)}</div>`;
-  } else if (state.entryMessage === 'unavailable') {
-    msg = `<div class="note warn">Free-text matching is unavailable. Choose a calculator below to enter your assumptions manually.</div>`;
-  }
-
-  app.innerHTML = `<section class="entry">
-    <h1>If this decision costs you money, how many dollars would a $1,000 investment offset?</h1>
-    <textarea id="prompt" maxlength="1200" aria-label="Decision to model" placeholder="What cost, income, or foreign bill could change?">${esc(state.promptText)}</textarea>
-    <div class="row"><button class="primary" data-action="analyze" ${state.matching ? 'disabled' : ''}>${state.matching ? 'Matching…' : 'Match this decision'}</button></div>
-    ${state.inference.configured ? `<p class="muted small">Free-text matching by ${esc(providerLabel(state.inference))}.</p>` : ''}
-    ${msg}
-    ${chips ? `<div class="chip-row">${chips}</div>` : ''}
-    <p class="muted small">Or start from a supported example</p>
-    <ul class="samples">${curated}</ul>
-    ${templates ? `<p class="muted small">Or a generic template for your own decision</p><ul class="samples">${templates}</ul>` : ''}
-  </section>`;
-}
-
-function renderConfirm() {
+function renderSurvey() {
   const c = caseById(state.caseId);
-  const fixed = isFixedUsd(c);
-  const custom = isCustom(c);
-  let followUp = '';
-  if (c.followUp.kind === 'choice') {
-    followUp = `<h3>${esc(c.followUp.question)}</h3><div class="choices">` +
-      c.followUp.options.map(o =>
-        `<button class="choice-btn ${state.followUpChoice === o.id ? 'selected' : ''}" data-action="followup" data-opt="${o.id}">${esc(o.label)}</button>`).join('') +
-      `</div>`;
-    const chosen = c.followUp.options.find(o => o.id === state.followUpChoice);
-    if (chosen && chosen.supported === false) {
-      followUp += `<div class="note warn">${esc(c.followUp.unsupportedNote)}</div>`;
-    }
-  } else {
-    followUp = `<h3>${esc(c.followUp.question)}</h3>`;
-  }
-  const valid = validateAll(c);
-  const fields = fieldsHTML(c);
-  const chosenUnsupported = c.followUp.kind === 'choice' &&
-    c.followUp.options.find(o => o.id === state.followUpChoice && o.supported === false);
-  const needsChoice = c.followUp.kind === 'choice' && !state.followUpChoice;
-  app.innerHTML = `<section>
-    <p class="step">Step 2 of 2 — confirm the exposure</p>
-    <h1>${esc(c.title)}</h1>
-    ${echoHTML()}
-    <p class="muted">We interpreted your decision this way. Correct anything that looks off — every number is editable.</p>
-    ${sourceNote() ? `<p class="muted small">${esc(sourceNote())}</p>` : ''}
-
-    ${followUp}
-    ${fixed ? `<div class="note key">${esc(c.fixedMode.message)}<br><span class="muted">${esc(c.fixedMode.note)}</span></div>` : ''}
-    <div class="field-grid">${customMetaFields(c)}${fields}</div>
-    <p class="muted small">${fixed
-      ? `Bill of ${fmtUSD(num('fixedBillUsd'))} fixed in US dollars.`
-      : custom ? esc(c.riskSummary) : `${esc(c.riskSummary)} Period: ${esc(c.period)}.`}</p>
-    <div class="row">
-      <button class="primary" data-action="confirm" ${(!valid || needsChoice || chosenUnsupported) ? 'disabled' : ''}>See the hedge</button>
-      <button class="ghost" data-action="back">Not my decision</button>
+  const index = state.questionIndex;
+  const { steps, pending } = surveyFlow(c);
+  const { field, title: prompt, id, options } = steps[index];
+  const total = steps.length;
+  const branching = pending || BRANCH_FIELDS.has(field?.name);
+  const step = branching ? `Question ${index + 1}` : `Question ${index + 1} of ${total}`;
+  const title = field ? QUESTIONS[field.name] : prompt;
+  const error = field && state.errors[field.name];
+  const segments = Array.from({ length: total }, (_, i) =>
+    `<span class="${i < index ? 'done' : i === index ? 'current' : ''}"></span>`).join('');
+  const back = `<button type="button" class="ghost" data-action="survey-back">${index === 0 ? 'Change scenario' : 'Back'}</button>`;
+  const hint = field?.name === 'scenarioMiles' ? 'Enter your estimated yearly miles, no more than your usual mileage.'
+    : field?.name === 'yenHeld' ? 'Include only yen already set aside for this bill.'
+      : field?.name === 'stockAmount' ? 'This is a simulated investment, not a recommendation. Enter 0 to skip it.'
+        : field?.unit === '%' ? 'Use an illustrative total return over the whole period, not a yearly return. Enter a negative number to model a loss.'
+          : 'Use the example value or enter your own.';
+  app.innerHTML = `<section class="survey" aria-labelledby="survey-question">
+    <div class="survey-meta">
+      <p>${esc(c.title)}</p>
+      <p id="survey-step">${step}</p>
     </div>
-  </section>`;
-}
-
-function renderResult() {
-  const c = caseById(state.caseId);
-  const fixed = isFixedUsd(c);
-  const custom = isCustom(c);
-  const sc = scenarioById(c, state.scenarioId);
-  const valid = validateAll(c);
-
-  const impact = valid ? computeImpact(c, sc) : NaN;
-  const gain = valid ? computeGain(c, sc) : null;
-  const combined = gain === null ? null : combinedChange(impact, gain);
-  const classification = Number.isFinite(impact) ? classifyOutcome(impact, gain) : null;
-  const label = outcomeText(classification);
-  const rDec = valid ? currentReturnDecimal(c, sc) : null;
-  const pos = parseFloat(state.position);
-
-  let bar = '';
-  if (Number.isFinite(impact) && impact < 0) {
-    const loss = Math.abs(impact);
-    if (gain === null) {
-      bar = `<div class="offset-bar"><div class="loss-part" style="width:100%"></div></div>
-        <p class="offset-caption">The position’s outcome is unknown until you supply a return.</p>`;
-    } else if (gain > 0) {
-      const covered = Math.min(gain, loss);
-      bar = `<div class="offset-bar"><div class="covered" style="width:${(covered / loss) * 100}%"></div><div class="loss-part" style="width:${((loss - covered) / loss) * 100}%"></div></div>
-        <p class="offset-caption">${fmtUSD(covered)} of the ${fmtUSD(loss)} loss covered — ${(covered / loss * 100).toFixed(0)}%.</p>`;
-    } else {
-      const total = loss + Math.abs(gain);
-      bar = `<div class="offset-bar"><div class="loss-part" style="width:${(loss / total) * 100}%"></div><div class="added" style="width:${(Math.abs(gain) / total) * 100}%"></div></div>
-        <p class="offset-caption">${gain === 0 ? 'The position adds nothing — the full loss stands.' : `The position adds ${fmtUSD(Math.abs(gain))} on top of the loss.`}</p>`;
-    }
-  }
-
-  const scenarioRows = c.scenarios.map(s => {
-    const i2 = computeImpact(c, s);
-    const g2 = s.id === state.scenarioId ? gain
-      : isCashKind(s.kind) ? yenBenchmarkGain(pos || 0, num('budgetRate'), num('scenarioRate'))
-      : positionGain(pos || 0, s.returnPct / 100);
-    const cb = g2 === null ? null : combinedChange(i2, g2);
-    const ret = s.id === state.scenarioId ? fmtPct(rDec) : isCashKind(s.kind)
-      ? fmtPct(yenBenchmarkReturnDecimal(num('budgetRate'), num('scenarioRate')))
-      : fmtPct(s.returnPct / 100);
-    const sub = s.id === state.scenarioId ? '<span class="sc-combined">selected</span>'
-      : `<span class="sc-combined">${valid ? fmtSignedUSD(cb) : "—"} combined</span>`;
-    return `<button class="scenario ${s.id === state.scenarioId ? 'active' : ''}" data-action="scenario" data-sc="${s.id}">
-      <span>${esc(s.label)}${sub}</span><span class="sc-return">${ret}</span></button>`;
-  }).join('');
-
-  const fields = fieldsHTML(c);
-
-  const returnField = isCashKind(sc.kind)
-    ? `<div class="field"><label>Return over the horizon (from the two rates)</label>
-       <input type="text" value="${rDec === null ? '—' : fmtPct(rDec)}" disabled></div>`
-    : `<div class="field"><label for="f-returnPct">Assumed ${custom ? 'paper' : 'stock'} return (%)</label>
-       <input id="f-returnPct" data-field="returnPct" type="number" step="any" value="${esc(state.returnPct)}" ${state.returnUnknown ? 'disabled' : ''} class="${state.errors.returnPct ? 'invalid' : ''}">
-       ${state.errors.returnPct ? `<div class="error">${esc(state.errors.returnPct)}</div>` : ''}</div>`;
-
-  let extras = '';
-  if (isCashKind(sc.kind) && rDec !== null && pos > 0) {
-    const bought = pos * num('budgetRate');
-    const worth = bought / num('scenarioRate');
-    const cur = sc.kind === 'yen-cash' ? '¥' : (state.unitLabel || 'units');
-    const amount = bought.toLocaleString('en-US', { maximumFractionDigits: 2 });
-    extras += `<p class="muted small">At these rates, ${fmtUSD(pos)} buys ${cur === '¥' ? `¥${amount}` : `${amount} ${esc(cur)}`}, worth ${fmtUSD(worth)} when the bill is due.</p>`;
-  }
-  if (impact < 0 && !state.returnUnknown) {
-    const be = breakEvenPosition(impact, rDec);
-    extras += be !== null
-      ? `<div class="note">At ${fmtPct(rDec)}, covering the whole ${fmtUSD(Math.abs(impact))} loss would take a ${fmtUSD(be)} position. Conditional arithmetic, not a recommendation.</div>`
-      : `<div class="note">With a ${rDec === null ? 'unknown' : fmtPct(rDec)} return, no positive holding covers this loss under that assumption.</div>`;
-  }
-  if (state.returnUnknown && impact < 0) {
-    const ber = breakEvenReturn(impact, pos);
-    if (ber !== null) extras += `<div class="note">Break-even: your ${fmtUSD(pos)} position would need a ${fmtPct(ber)} return to cover the whole ${fmtUSD(Math.abs(impact))} loss.</div>`;
-  }
-
-  let whyPanel;
-  if (c.company) {
-    const sources = c.company.sources.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label)}</a>`).join('');
-    whyPanel = `<section class="panel company">
-    <h2>Why ${esc(c.company.name)} (${esc(c.company.ticker)}) appeared</h2>
-    <p class="fact"><span class="tag sourced">Sourced fact</span> ${esc(c.company.fact)}</p>
-    <p class="caveat">${esc(c.company.caveat)}</p>
-    <p class="sources">${sources}</p>
-    ${state.inference.configured ? `<div class="ask">
-      <input id="ask-q" type="text" maxlength="800" placeholder="Ask about ${esc(c.company.name)} and this risk" value="${esc(state.ask.question)}">
-      <button data-action="ask" ${state.ask.loading ? 'disabled' : ''}>${state.ask.loading ? 'Asking…' : 'Ask'}</button>
-    </div>
-    ${state.ask.answer ? `<p class="ask-answer">${esc(state.ask.answer)}</p>
-      <p class="muted small">${esc(providerLabel(state.inference))} selects from the facts and scenarios in this example.</p>` : ''}` : ''}
-  </section>`;
-  } else {
-    const isFx = c.impactType === 'fx-bill';
-    const total = num('quantity') * num('baselinePrice');
-    const action = c.impactType === 'income' ? 'receiving' : 'paying';
-    whyPanel = `<section class="panel company">
-    <h2>${isFx ? 'Holding the invoice currency' : 'What if you could fix the price today?'}</h2>
-    <p>${isFx
-      ? 'Converting dollars at the budgeted rate covers the exchange-rate change on the amount you convert. Select the currency benchmark below to see how much of the bill your paper position covers.'
-      : `If you could agree to the baseline rate for the whole quantity, you would model ${action} ${valid ? fmtUSD(total) : 'the baseline total'} over this period. That assumes the agreement covers every unit and carries no fees. You would also give up any benefit from a favorable price move.`}</p>
-  </section>`;
-  }
-
-  const chosenLabel = c.followUp.kind === 'choice' && state.followUpChoice
-    ? c.followUp.options.find(o => o.id === state.followUpChoice)?.label : null;
-
-  app.innerHTML = `
-  <section class="verdict">
-    <div class="verdict-number ${combined === null ? '' : combined < 0 ? 'neg' : 'pos'}">${combined === null ? '—' : fmtSignedUSD(roundCents(combined))}</div>
-    <div class="verdict-parts">decision ${fmtSignedUSD(roundCents(impact))}, hedge ${fmtSignedUSD(gain)}${combined === null ? ' — combined unknown' : ''}</div>
-    ${bar}
-    <p class="verdict-label">${valid ? esc(label.text) : 'Correct the highlighted inputs to recalculate.'}</p>
-    ${extras}
-  </section>
-
-  ${whyPanel}
-
-  <section class="split">
-    <div class="col">
-      <h2>Your decision</h2>
-      <p class="muted small">${esc(c.title)}${chosenLabel ? ` — ${esc(chosenLabel)}` : ''}. ${esc(periodText(c))}.</p>
-      ${echoHTML()}
-      ${fixed ? `<div class="note key">${esc(c.fixedMode.message)}<br><span class="muted">${esc(c.fixedMode.note)}</span></div>` : ''}
-      <div class="field-grid">${fields}</div>
-      <p class="impact-line small">Decision impact: <strong class="${impact < 0 ? 'neg' : ''}">${fmtSignedUSD(roundCents(impact))}</strong></p>
-      <button class="ghost" data-action="back">Change decision</button>
-    </div>
-    <div class="col">
-      <h2>The paper hedge <span class="tag synthetic">Synthetic outcomes</span></h2>
-      <div class="scenario-list">${scenarioRows}</div>
-      <p class="scenario-reason">${esc(sc.reason)}</p>
-      <div class="field-grid">
-        <div class="field"><label for="f-position">Paper position (USD)</label>
-          <input id="f-position" data-field="position" type="number" step="any" value="${esc(state.position)}" class="${state.errors.position ? 'invalid' : ''}">
-          ${state.errors.position ? `<div class="error">${esc(state.errors.position)}</div>` : ''}</div>
-        ${returnField}
-        ${!isCashKind(sc.kind) ? `<div class="field"><div class="checkbox-row"><input id="f-unknown" data-field="returnUnknown" type="checkbox" ${state.returnUnknown ? 'checked' : ''}><label for="f-unknown">I don’t know the return</label></div></div>` : ''}
+    <div class="survey-progress${branching ? ' pending' : ''}" aria-hidden="true">${segments}</div>
+    <h1 id="survey-question" data-step-heading tabindex="-1" aria-describedby="survey-step">${esc(title)}</h1>
+    ${field ? `<form class="survey-form" id="survey-form" novalidate>
+      <label id="survey-unit" for="survey-answer">${esc(field.unit)}</label>
+      <input id="survey-answer" name="answer" type="number" step="any" inputmode="decimal"
+        aria-labelledby="survey-question" aria-describedby="survey-unit survey-hint${error ? ' survey-error' : ''}"
+        ${error ? 'aria-invalid="true"' : ''} value="${esc(state.inputs[field.name])}">
+      <p id="survey-hint" class="survey-hint">${hint}</p>
+      ${error ? `<p id="survey-error" class="survey-error">${esc(error)}</p>` : ''}
+      <div class="survey-actions">
+        <button type="submit" class="primary">${!branching && index + 1 === total ? 'See results' : 'Continue'}</button>
+        ${back}
       </div>
-      <button data-action="fail">What would make this fail?</button>
-      ${state.showFailure ? `<div class="note warn">${esc(c.company ? c.company.caveat : 'This is the failure path: under the same hit to you, the paper position loses too. No outcome here is guaranteed.')}</div>` : ''}
+    </form>` : `<div class="choices survey-choices">${options.map(o =>
+      `<button type="button" class="choice-btn ${state.choices[id] === o.id ? 'selected' : ''}" data-action="followup" data-opt="${esc(o.id)}">${esc(o.label)}${state.choices[id] === o.id ? ' <span class="sr-only">Previously selected.</span>' : ''}</button>`).join('')}
     </div>
-  </section>
+    <div class="survey-actions">${back}</div>`}
+  </section>`;
+}
 
-  <p class="fineprint">Held as cash instead, ${fmtUSD(pos || 0)} earns $0 by assumption — a $0 position leaves the decision’s ${fmtSignedUSD(roundCents(impact))} untouched.</p>`;
+function resultHTML(c) {
+  const fixed = isFixedUsd(c);
+  const careerSwitch = isCareerSwitch(c);
+  const [changed, unchanged] = careerSwitch ? ['Your role disappears', 'Your role remains'] : OUTCOME_LABELS[c.id];
+  const cols = [{ label: changed, impact: computeImpact(c) }, { label: unchanged, impact: 0 }];
+  const loss = roundCents(cols[0].impact) < 0;
+  const covered = c.id === 'yen' && !fixed && remainingYen() === 0;
+  const yenHedge = c.id === 'yen' && !fixed && loss;
+  const carStock = c.id === 'car' && state.choices.fuelDriver === 'tight-supply';
+  const stockAmount = careerSwitch || carStock ? num('stockAmount') : 0;
+  const riskGain = positionGain(stockAmount, num(careerSwitch ? 'stockSwitchReturn' : 'stockFuelReturn') / 100);
+  const quietGain = positionGain(stockAmount, num(careerSwitch ? 'stockStayReturn' : 'stockStableFuelReturn') / 100);
+  const stockHedge = (careerSwitch || carStock) && loss && stockAmount > 0 && roundCents(riskGain) > 0 && riskGain > quietGain;
+  const recommended = yenHedge || stockHedge;
+  const maxPosition = yenHedge ? remainingYen() / num('budgetRate') : 0;
+  const rawPosition = state.position ?? String(Math.min(c.defaultPosition, maxPosition));
+  const pos = parseFloat(rawPosition);
+  const posError = yenHedge && (validateField('position', pos) ||
+    (pos === 0 ? 'Enter an amount greater than $0.' :
+      pos > maxPosition ? 'Enter no more than the budgeted dollar cost of your bill.' : null));
+  if (yenHedge) {
+    const rate = yenBenchmarkReturnDecimal(num('budgetRate'), num('scenarioRate'));
+    cols[0].total = combinedChange(cols[0].impact, posError ? null : positionGain(pos, rate));
+    cols[1].total = posError ? null : 0;
+  }
+  if (stockHedge) {
+    cols[0].total = combinedChange(cols[0].impact, riskGain);
+    cols[1].total = quietGain;
+  }
+  const money = n => n === null ? 'Unknown' : fmtSignedUSD(roundCents(n));
+  const responseRows = surveyFlow(c).steps.map(({ field: f, id, label, options }) => {
+    if (!f) return `<div><dt>${esc(label)}</dt><dd>${esc(options.find(o => o.id === state.choices[id]).label)}</dd></div>`;
+    const value = num(f.name);
+    const digits = value.toLocaleString('en-US', { maximumFractionDigits: 10 });
+    const answer = f.unit === '$' ? fmtUSD(value)
+      : f.unit === '¥' ? `¥${digits}`
+      : f.unit === '$/gal' ? `${fmtUSD(value)} per gallon`
+      : f.unit === 'US dollars per month' ? `${fmtUSD(value)} per month`
+      : f.unit === '%' ? `${digits}%`
+      : `${digits} ${f.unit === 'mpg' ? 'miles per gallon' : f.unit}`;
+    return `<div><dt>${esc(f.label)}</dt><dd>${esc(answer)}</dd></div>`;
+  }).join('');
+  const stockName = `${c.company.name} (${c.company.ticker})`;
+  const action = fixed || covered ? 'No currency hedge needed'
+    : yenHedge ? 'Consider holding yen for the bill'
+      : stockHedge ? `Test ${stockName} as a possible offset` : 'No hedge recommended';
+  const explanation = fixed ? c.fixedMode.message : covered ? 'There is no unpaid yen balance to protect.'
+    : stockHedge ? `Under your assumptions, the position earns ${fmtUSD(riskGain)} ${careerSwitch ? 'if your role disappears' : 'if fuel prices rise'}. The modeled ${careerSwitch ? 'earnings' : 'fuel-cost'} change without it is ${money(cols[0].impact)}.`
+      : yenHedge
+        ? posError ? 'Enter a valid amount to see how much holding yen could offset.'
+          : `At these exchange rates, holding yen changes the modeled result from ${money(cols[0].impact)} to ${money(cols[0].total)}.`
+        : loss ? 'The available hedge does not reliably offset this cost in the examples shown.'
+          : 'Your answers show no modeled loss to offset.';
+  const reasoning = fixed ? 'Your bill is already in US dollars, so changes in the yen do not change what you owe.'
+    : covered ? 'An exchange-rate change only affects the part of your tuition that you still need to buy yen for.'
+    : stockHedge ? (careerSwitch
+        ? 'Demand for AI-assisted security tools could rise as some roles disappear, but stock prices can fall even if that happens. The result uses your assumed returns, not a forecast or a recommendation to buy.'
+        : 'Tight gasoline supply can lift refining margins, but a refinery stock does not track the pump price. The result uses your assumed returns, not a forecast or a recommendation to buy.')
+    : careerSwitch ? 'A permanent switch changes your pay over the years you entered. No stock offset is shown unless the assumptions produce a positive gain that is larger when your role disappears than when it remains.'
+    : yenHedge ? 'Holding yen matches the currency of your bill. Only the yen you still need to buy is exposed to exchange-rate changes.'
+      : c.id === 'cyber' ? num('extraMonths') === 0 ? 'You entered no delay, so there is no missed pay in this comparison.'
+          : state.choices.backupPay === 'yes' ? 'The income from your other job reduces the pay you miss during the delay. A stock can fall at the same time that hiring slows, so it does not reliably cover that gap.'
+            : 'Without another paycheck, the delay costs the full amount of pay you would have earned. A stock can fall at the same time that hiring slows, so it does not reliably cover that gap.'
+        : c.id === 'car' ? loss && state.choices.fuelDriver === 'other'
+            ? 'A tax or fee can raise what you pay without improving refinery margins, so this model does not show a refining-stock hedge for that outcome.'
+            : num('scenarioPrice') > num('budgetPrice') && state.choices.driving === 'less'
+              ? 'The higher-price outcome includes your reduced mileage. It compares fuel spending only, not the cost of other transportation.'
+              : 'Fuel prices can rise without a matching gain elsewhere. Allow room for higher pump prices in your budget.'
+          : 'At the exchange rates you entered, your yen bill costs no more than you budgeted in US dollars.';
+  const positionField = yenHedge ? fieldHTML({ name: 'position', label: 'Amount to convert to yen', unit: 'US dollars', value: rawPosition, error: posError }) : '';
+  const magnitude = Math.max(0, ...cols.flatMap(({ impact, total }) => [impact, total])
+    .filter(Number.isFinite).map(Math.abs));
+  const cells = key => cols.map(col => {
+    const value = key === 'total' && !recommended ? col.impact : col[key];
+    const known = Number.isFinite(value);
+    const rounded = known ? roundCents(value) : 0;
+    const tone = !known ? 'unknown' : rounded > 0 ? 'gain' : rounded < 0 ? 'loss' : 'even';
+    const heat = tone === 'gain' || tone === 'loss'
+      ? ` style="--matrix-heat:${18 + 32 * Math.abs(value) / magnitude}%"` : '';
+    return `<td><span class="matrix-tile ${tone}"${heat}>${money(known ? value : null)}</span></td>`;
+  }).join('');
+  return `<div class="results">
+    <section class="result-section verdict" aria-labelledby="verdict-title">
+      <p class="result-context">${esc(c.title)}</p>
+      <h1 id="verdict-title" data-step-heading tabindex="-1" aria-describedby="verdict-explanation">${esc(action)}</h1>
+      <p id="verdict-explanation">${esc(explanation)}</p>
+    </section>
+    <section class="result-section" aria-labelledby="matrix-title">
+      <h2 id="matrix-title">Compare outcomes</h2>
+      <p id="matrix-caption" class="muted small">Change from your budget or expected pay, in US dollars. ${stockHedge ? `A ${fmtUSD(stockAmount)} paper position in ${esc(stockName)} is compared with keeping that money in cash. The stock returns are hypothetical.${careerSwitch ? ' The pay comparison assumes flat monthly pay and does not account for taxes, wage growth or discounting.' : ''}` : yenHedge ? (posError ? 'Enter a valid amount to compare holding yen with US-dollar cash.' : `Hedging uses ${fmtUSD(pos)} to buy yen; not hedging leaves that amount in US-dollar cash.`) : 'No hedge is modeled for your answers, so both rows show the same outcome.'} Outcomes are hypothetical.</p>
+      <div class="matrix-scroll" role="region" aria-labelledby="matrix-title" tabindex="0">
+        <table class="scenario-matrix" aria-labelledby="matrix-title" aria-describedby="matrix-caption matrix-key">
+          <thead><tr><th scope="col">Decision</th>${cols.map(({ label }) => `<th scope="col">${esc(label)}</th>`).join('')}</tr></thead>
+          <tbody><tr><th scope="row">With a hedge</th>${cells('total')}</tr><tr><th scope="row">Without a hedge</th>${cells('impact')}</tr></tbody>
+        </table>
+      </div>
+      <p id="matrix-key" class="matrix-key">A minus sign means a loss; a plus sign means a gain. Darker color indicates a larger change.</p>
+      ${yenHedge ? `<details${state.settingsOpen ? ' open' : ''} class="hedge-settings">
+        <summary>Adjust amount to convert</summary>
+        <form id="hedge-form" novalidate>
+          <div class="field-grid">${positionField}</div>
+          <p class="muted small">Do not convert more than you still need for the bill.</p>
+          <button type="submit" class="primary">Update comparison</button>
+        </form>
+      </details>` : ''}
+    </section>
+    <section class="result-section" aria-labelledby="reason-title">
+      <h2 id="reason-title">Why this result?</h2>
+      <p>${esc(reasoning)}</p>
+      ${stockHedge ? `<p>${esc(c.company.fact)} <a href="${esc(c.company.sources[0].url)}" target="_blank" rel="noopener">Company source</a></p>` : ''}
+    </section>
+    <section class="result-section" aria-labelledby="responses-title">
+      <h2 id="responses-title">Your responses</h2>
+      <dl class="response-list">${responseRows}</dl>
+      <div class="row"><button type="button" class="ghost" data-action="edit-answers">Edit responses</button>
+        <button type="button" class="ghost" data-action="back">Change scenario</button></div>
+    </section>
+  </div>`;
 }
 
 function render() {
-  if (state.screen === 'entry') renderEntry();
-  else if (state.screen === 'confirm') renderConfirm();
-  else renderResult();
-  document.getElementById('assumptions').innerHTML =
-    `<strong>How this demo treats uncertainty:</strong><ul>${ASSUMPTIONS.map(a => `<li>${esc(a)}</li>`).join('')}</ul>`;
+  if (state.screen === 'entry') app.innerHTML = entryHTML();
+  else if (state.screen === 'survey') renderSurvey();
+  else app.innerHTML = resultHTML(caseById(state.caseId));
+  const footer = document.getElementById('assumptions');
+  footer.hidden = state.screen !== 'entry';
+  footer.innerHTML =
+    `<details><summary>How this simulation works</summary><ul>${ASSUMPTIONS.map(a => `<li>${esc(a)}</li>`).join('')}</ul></details>`;
+}
+
+function renderStep(focus = '[data-step-heading]') {
+  render();
+  (app.querySelector(focus) ?? app.querySelector('[data-step-heading]'))?.focus();
+}
+
+function advanceSurvey(c) {
+  if (state.questionIndex + 1 >= surveyFlow(c).steps.length) state.screen = 'result';
+  else state.questionIndex++;
+  renderStep();
 }
 
 // ---------- events ----------
 
-function applyAiInputs(inputs) {
-  if (!inputs || typeof inputs !== 'object') return;
-  for (const [k, v] of Object.entries(inputs)) {
-    if (!Number.isFinite(v)) continue;
-    if (k === 'position') { state.position = String(v); state.supplied.add(k); }
-    else if (k in state.inputs) { state.inputs[k] = String(v); state.supplied.add(k); }
-  }
-}
-
-app.addEventListener('click', async e => {
+app.addEventListener('click', e => {
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
   const c = state.caseId ? caseById(state.caseId) : null;
   switch (btn.dataset.action) {
-    case 'pick':
-      state.matchSeq++;
-      initCase(btn.dataset.case);
-      break;
-    case 'analyze': {
-      state.promptText = document.getElementById('prompt').value;
-      const text = state.promptText.trim();
-      state.matching = true;
-      state.entryMessage = null;
-      state.suggestions = [];
-      const seq = ++state.matchSeq;
-      render();
-      // Stale-guard: drop the response if a newer request started, the user
-      // left the entry screen, or the text was edited while the call flew.
-      const fresh = () => seq === state.matchSeq && state.screen === 'entry' &&
-        (document.getElementById('prompt')?.value ?? text).trim() === text;
-      try {
-        // Exact sample wording matches locally — works with or without the inference service.
-        const exact = matchSample(text);
-        if (exact) {
-          initCase(exact.caseId);
-          state.matchSource = 'sample';
-          state.promptEcho = text;
-        } else if (!text) {
-          state.entryMessage = 'unsupported';
-        } else {
-          // Await the status probe so we never fire a pointless request.
-          const status = await inferenceStatus();
-          const res = fresh() && status.configured ? await interpretDecision(text) : null;
-          if (fresh()) {
-            if (res && res.type === 'match' && caseById(res.caseId)) {
-              initCase(res.caseId);
-              state.matchSource = 'ai';
-              state.promptEcho = text;
-              applyAiInputs(res.inputs);
-            } else if (res && (res.type === 'ambiguous' || res.type === 'unsupported')) {
-              state.entryMessage = res.type;
-              state.suggestions = res.type === 'ambiguous' ? suggestCases(text) : [];
-            } else {
-              // Offline, timed out, or the model answered outside the contract.
-              state.entryMessage = 'unavailable';
-              state.suggestions = suggestCases(text);
-            }
-          }
-        }
-      } finally {
-        if (seq === state.matchSeq) {
-          state.matching = false;
-          const el = document.getElementById('prompt');
-          if (state.screen === 'entry' && el) state.promptText = el.value;
-        }
-      }
-      break;
-    }
-    case 'ask': {
-      const q = document.getElementById('ask-q').value.trim();
-      if (!q || state.ask.loading || !c || !c.company) break;
-      state.ask = { question: q, answer: null, loading: true };
-      render();
-      const answer = await askAbout({ caseId: c.id }, q);
-      // Drop stale answers if the user navigated away or asked again meanwhile.
-      if (state.caseId === c.id && state.screen === 'result' && state.ask.question === q) {
-        state.ask = { question: q, answer: answer || `${providerLabel(state.inference)} could not answer — check the connection and try again.`, loading: false };
-      }
-      break;
+    case 'pick': {
+      const selected = caseById(btn.dataset.case);
+      if (!selected) return;
+      initCase(selected);
+      return renderStep();
     }
     case 'followup': {
-      state.followUpChoice = btn.dataset.opt;
-      const opt = c.followUp.options.find(o => o.id === state.followUpChoice);
-      if (c.id === 'yen' && opt && opt.id === 'usd-invoice') {
-        for (const f of c.fixedMode.inputs) if (!(f.name in state.inputs)) state.inputs[f.name] = String(f.default);
-      }
-      break;
+      if (state.screen !== 'survey') return;
+      const { id, options } = surveyFlow(c).steps[state.questionIndex];
+      if (!options?.some(o => o.id === btn.dataset.opt)) return;
+      state.choices[id] = btn.dataset.opt;
+      return advanceSurvey(c);
     }
-    case 'confirm': if (validateAll(c)) state.screen = 'result'; break;
-    case 'back': state.screen = 'entry'; state.entryMessage = null; state.suggestions = []; break;
-    case 'scenario': {
-      state.scenarioId = btn.dataset.sc;
-      const s = scenarioById(c, state.scenarioId);
-      state.returnPct = isCashKind(s.kind) ? '' : String(s.returnPct);
-      state.returnUnknown = false;
-      state.showFailure = false;
-      break;
-    }
-    case 'fail': {
-      const f = c.scenarios.find(s => s.isFailure);
-      if (f) {
-        state.scenarioId = f.id;
-        if (!isCashKind(f.kind)) { state.returnPct = String(f.returnPct); state.returnUnknown = false; }
-        state.showFailure = true;
-      }
-      break;
-    }
+    case 'survey-back':
+      state.errors = {};
+      if (state.questionIndex === 0) state.screen = 'entry';
+      else state.questionIndex--;
+      return renderStep();
+    case 'back':
+      state.screen = 'entry';
+      return renderStep();
+    case 'edit-answers':
+      state.questionIndex = 0;
+      state.errors = {};
+      state.screen = 'survey';
+      return renderStep();
   }
   render();
 });
 
-app.addEventListener('change', e => {
-  const el = e.target.closest('[data-field]');
-  if (!el) return;
-  const name = el.dataset.field;
-  state.supplied.delete(name);
-  if (name === 'position') state.position = el.value;
-  else if (name === 'returnPct') state.returnPct = el.value;
-  else if (name === 'returnUnknown') state.returnUnknown = el.checked;
-  else if (name === 'horizon') state.horizon = el.value;
-  else if (name === 'unitLabel') state.unitLabel = el.value;
-  else state.inputs[name] = el.value;
-  render();
+app.addEventListener('input', e => {
+  if (state.screen !== 'survey' || e.target.id !== 'survey-answer') return;
+  const c = caseById(state.caseId);
+  const { field } = surveyFlow(c).steps[state.questionIndex];
+  if (field) state.inputs[field.name] = e.target.value;
 });
 
-app.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.id === 'prompt' && (e.metaKey || e.ctrlKey)) {
-    document.querySelector('[data-action="analyze"]').click();
+app.addEventListener('submit', e => {
+  if (state.screen === 'result' && e.target.id === 'hedge-form') {
+    e.preventDefault();
+    state.position = e.target.elements.namedItem('f-position').value;
+    state.settingsOpen = true;
+    return renderStep('#hedge-form [aria-invalid="true"]');
   }
+  if (state.screen !== 'survey' || e.target.id !== 'survey-form') return;
+  e.preventDefault();
+  const c = caseById(state.caseId);
+  const { field } = surveyFlow(c).steps[state.questionIndex];
+  if (!field) return;
+  const answer = e.target.elements.answer;
+  state.inputs[field.name] = answer.value;
+  const value = answer.valueAsNumber;
+  const rule = field.name === 'stockAmount' ? 'position' : field.unit === '%' ? 'returnPct' : field.name;
+  const error = validateField(rule, value) ||
+    (field.name === 'scenarioMiles' && value > num('annualMiles') ? 'Enter no more than your usual yearly mileage.' :
+      field.name === 'yenHeld' && value > num('yenDue') ? 'Enter no more than the total tuition due.' : null);
+  state.errors = error ? { [field.name]: error } : {};
+  if (error) return renderStep('#survey-answer');
+  advanceSurvey(c);
 });
 
-inferenceStatus().then(s => {
-  state.inference = s;
-  const el = document.getElementById('prompt');
-  if (state.screen === 'entry' && el) state.promptText = el.value;
-  render();
-});
 render();

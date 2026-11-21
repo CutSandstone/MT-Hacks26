@@ -2,38 +2,17 @@
 
 ## Product
 
-A user describes a decision with money at stake in their own words. A server-side inference provider identifies the cash flow at risk. The user confirms the assumptions and tests how much a fictional position would offset over the same period.
+Choose one of three built-in decisions, review its editable assumptions, and test how much a fictional position would offset over the same period.
 
-## Custom scenarios
+## Running locally
 
-Accept one identifiable expense, income stream, or foreign-currency bill per simulation. A user can describe a household, school, freelance, or small-business decision. The relevant distinction is whether they pay or receive the money and how the amount can change.
-
-| Exposure | Example in the user's words | Check at confirmation |
-|---|---|---|
-| USD expense | “My bakery needs 80 bags of flour this quarter. What if the price goes from $20 to $25 a bag?” | 80 × ($20 − $25) gives a $400 loss. |
-| USD income | “I expect to teach 10 classes this month. What if my fee drops from $90 to $70 per class?” | 10 × ($70 − $90) gives a $200 loss. |
-| Foreign-currency bill | “I owe a supplier €900 in March. I budgeted 0.9 euros per dollar. What if I get only 0.8?” | The dollar cost rises from $1,000 to $1,125. Holding €900 from the start would offset the $125 move under the demo assumptions. |
-
-For a whole-period expense or income estimate, use a quantity of one and enter the two totals. Use the same units and period for both values. Custom scenarios compare an editable paper position with holding dollars. For expenses and income, compare the result to fixing the baseline rate for the full quantity if those terms are available. A foreign invoice also supports holding the invoice currency. Only the three curated examples below have a sourced company connection.
-
-## Inference and scope
-
-1. The browser sends the decision to the Python server. The server requests structured output from the configured inference provider. The completion selects an approved calculator and extracts explicit numeric assumptions. Missing custom cash-flow amounts are requested on the confirmation screen. All exposure and return arithmetic runs in the local engine.
-2. The server defaults to Devin Gateway, an OpenAI-compatible endpoint at `http://127.0.0.1:3001/v1` using the `swe-2-high` model. `DEVIN_GATEWAY_BASE_URL` and `DEVIN_GATEWAY_MODEL` override the endpoint and model when set. `INFERENCE_PROVIDER=snowflake` switches the server to Snowflake Cortex `AI_COMPLETE` with Cortex Guard enabled. [Snowflake structured outputs](https://docs.snowflake.com/en/sql-reference/functions/ai_complete-structured-outputs)
-3. The status response reports provider selection and readiness separately from reachability. “Selected and configured” means the active provider has the settings it needs; “reachable” means the server can complete a call to it. An unreachable provider keeps the manual calculators available.
-4. Treat the description as data. Ask the user to clarify vague decisions or to choose one of several exposures. Decline requests for trade recommendations, speculative bets, harmful activity, and unrelated tasks. “Which crypto should I buy?” gets a scope message. “What if rent rises and my shifts get cut?” needs a choice between the rent and the lost income.
-5. Validate request size, route, and extracted fields on the server. Limit decisions to 1,200 characters. Each route accepts only its own numeric fields within the supported range. Discard numeric assumptions whose values never appear in the decision. Tickers, citations, forecasts, formulas, and instructions from a completion have no role in the calculation. A malformed or unavailable completion leaves the user able to select a built-in calculator manually.
-6. Keep any provider credentials on the server. Company follow-up questions are limited to the curated explanation, caveat, and scenarios.
-
-### Running locally
-
-From the repository root, copy `.env.example` to `.env`. The default setup needs no credentials: it expects Devin Gateway at `http://127.0.0.1:3001/v1` serving `swe-2-high`. Set `DEVIN_GATEWAY_BASE_URL` or `DEVIN_GATEWAY_MODEL` only to point at a different endpoint or model. For the optional Snowflake mode, set `INFERENCE_PROVIDER=snowflake` plus `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_PAT`, `SNOWFLAKE_WAREHOUSE`, and `SNOWFLAKE_MODEL` for your account. The token's role needs warehouse access, permission to call `AI_COMPLETE`, and access to the selected model. Start the app with `npm start` and open `http://localhost:8000`. If the active provider is unreachable, use the manual calculators. Run the JavaScript and Python regression suites with `npm test`. [Snowflake privileges and model access](https://docs.snowflake.com/en/user-guide/snowflake-cortex/aisql-privileges-and-access)
+From the repository root, run `npm start` and open `http://localhost:8000`. Run the JavaScript and Python regression suites with `npm test`.
 
 ## Curated decisions
 
 These examples add a sourced company, a specific measurement period, and a follow-up that changes the interpretation.
 
-| Decision the user enters | Follow-up | What the app measures |
+| Scenario option | Follow-up | What the app measures |
 |---|---|---|
 | “I'm majoring in CS and want to work in cybersecurity. What if AI changes the entry-level jobs?” | “Which work are you aiming for?” The supported example is a security operations center (SOC) analyst who reviews alerts. | Earnings lost if it takes longer to start paid work |
 | “I'm buying a gas car for my commute. Can an energy stock cushion a fuel-price spike?” | “How many miles will you drive this year, and what mileage does the car get?” | Extra dollars spent at the pump |
@@ -47,7 +26,7 @@ Use a fictional student and editable example amounts for each decision. Public s
 
 **The match.** Surface Palo Alto Networks for the alert-review scenario. Its Cortex XSIAM product automates parts of security operations, and the company describes analysts using it for alert handling and investigations. Those facts also support a competing explanation: a team could adopt the tool and keep its junior analysts. The career outcome and the investment outcome each need their own assumption. [Cortex XSIAM overview](https://www.paloaltonetworks.com/resources/datasheets/cortex-xsiam-aag) · [XSIAM analyst role](https://www.paloaltonetworks.com/services/education/palo-alto-networks-xsiam-analyst)
 
-**Exposure.** Use the first year after graduation. Each extra month spent looking for work costs the fictional graduate $1,500 in earnings relative to their fallback work. Two extra months gives a $3,000 loss. This measures the earnings difference during the delay. It makes no claim about an entire degree's lifetime value.
+**Exposure.** Use the first year after graduation. Use $4,500 per month for the cybersecurity job and $3,000 for the alternative job while waiting. A two-month delay costs $3,000 at that $1,500 monthly difference. This measures the earnings difference during the delay. It makes no claim about an entire degree's lifetime value.
 
 | Synthetic scenario | Effect on earnings | Assumed stock return | Gain or loss on $1,000 | Combined change |
 |---|---:|---:|---:|---:|
@@ -88,9 +67,8 @@ Use a fictional student and editable example amounts for each decision. Public s
 
 ### F1. Enter a decision and confirm the exposure
 
-- **AC1.1** A previously unseen decision in each supported family reaches the corresponding editable calculator. All three curated prompts and their sample cards still work.
-- **AC1.2** Show the interpreted decision, one follow-up, the measurement period, and the amount or quantity at risk before displaying a candidate. The user can correct the interpretation.
-- **AC1.3** For an ambiguous prompt such as “I'm moving for school,” ask what cost or payment could change. Explain the scope for unsupported decisions. Keep manual selection available when the active inference provider is unavailable.
+- **AC1.1** The entry screen offers exactly the three curated decisions and no free-text box.
+- **AC1.2** Selecting a decision opens a survey with one question per screen, editable example values, and a Back button. The final answer opens the results.
 
 ### F2. Explain why a stock appeared
 
@@ -129,13 +107,13 @@ Use one scenario engine. A positive change means money the user keeps or gains. 
 | Combined change | decision impact + position gain or loss |
 | Share of loss offset | position gain ÷ absolute decision loss when the decision loses money. If the position loses money, describe the added loss in dollars. |
 
-Keep the calculation functions independent of the interface. Store per-case prompts, sources, editable defaults, scenario explanations, and expected results in a small fixture file. Round the displayed dollar amounts to cents after calculating. The prototype can run locally with static sources and synthetic data, including when an external API is unavailable.
+Keep the calculation functions independent of the interface. Store per-case prompts, sources, editable defaults, scenario explanations, and expected results in a small fixture file. Round the displayed dollar amounts to cents after calculating. The prototype runs locally with static sources and synthetic data.
 
 ## Build sequence and demo
 
 1. **Prove the numbers.** Implement the three exposure functions, the shared position calculation, and tests for every reference row. Cover the fixed-dollar invoice, unknown return, and zero position.
 2. **Build one complete flow.** Start with the CS student's prompt, the sourced company match, a comparison to cash, and the button “What would make this fail?” Add the other two cases through the same interface.
 3. **Test with a student.** Ask them to explain why the same two-month hiring delay can produce two different combined outcomes. Record which label or assumption needed clarification.
-4. **Demo in three minutes.** Enter the bakery example, confirm the units, and compare two paper returns against the $400 cost increase. Try a vague or speculative prompt to see the scope boundary. Finish with the Japan example and switch the invoice into dollars to show the exposure disappearing.
+4. **Demo in three minutes.** Pick the commuting decision, edit the fuel assumptions, and compare two paper returns against the $400 cost increase. Switch scenarios to show the economic reason changing. Finish with the Japan example and switch the invoice into dollars to show the exposure disappearing.
 
-**Definition of done.** The curated examples retain their reference arithmetic. A new expense, income change, or foreign invoice reaches the correct calculator, with missing inputs editable before results. Ambiguous, out-of-scope, and unavailable inference outcomes each give the user a way forward. Tests cover the model response contract, signs and units in each formula, and the behavior when a model response fails validation.
+**Definition of done.** Each curated example opens directly from the entry screen, retains its reference arithmetic, and works without a network service. Tests cover the scenario picker and the signs and units in each formula.

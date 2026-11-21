@@ -3,18 +3,6 @@
     "id": "cyber",
     "title": "Entering cybersecurity after a CS degree",
     "samplePrompt": "I'm majoring in CS and want to work in cybersecurity. What if AI changes the entry-level jobs?",
-    "keywords": [
-      "cybersecurity",
-      "cyber",
-      "computer science",
-      "cs major",
-      "cs",
-      "soc",
-      "security analyst",
-      "ai",
-      "entry-level job",
-      "entry level"
-    ],
     "followUp": {
       "question": "Which work are you aiming for?",
       "kind": "choice",
@@ -30,10 +18,10 @@
           "supported": false
         }
       ],
-      "unsupportedNote": "This matcher supports the SOC analyst example. Please choose it to see the company match."
+      "unsupportedNote": "This scenario models a SOC analyst role. Choose that role to continue."
     },
     "period": "First year after graduation",
-    "riskSummary": "Months of delayed paid work — each extra month costs $1,500 vs. fallback work.",
+    "riskSummary": "Pay you could miss while waiting to start a cybersecurity job.",
     "impactType": "career",
     "inputs": [
       {
@@ -43,10 +31,16 @@
         "unit": "months"
       },
       {
-        "name": "monthlyEarningsDiff",
-        "label": "Monthly earnings difference vs. fallback work",
-        "default": 1500,
-        "unit": "$/month"
+        "name": "cyberMonthlyPay",
+        "label": "Cybersecurity job pay",
+        "default": 4500,
+        "unit": "US dollars per month"
+      },
+      {
+        "name": "alternativeMonthlyPay",
+        "label": "Alternative job pay",
+        "default": 3000,
+        "unit": "US dollars per month"
       }
     ],
     "company": {
@@ -71,6 +65,7 @@
         "id": "automate",
         "kind": "stock",
         "label": "Employers automate some junior work and the vendor gains customers",
+        "shortLabel": "Hiring slows",
         "reason": "Adoption of the vendor's automation platform grows revenue faster than the hiring slowdown hurts it.",
         "returnPct": 20,
         "expected": {
@@ -83,6 +78,7 @@
         "id": "freeze",
         "kind": "stock",
         "label": "A spending freeze slows both hiring and software sales",
+        "shortLabel": "Spending freeze",
         "reason": "The same macro slowdown that delays hiring also cuts the vendor's sales — the stock falls with the risk.",
         "returnPct": -20,
         "expected": {
@@ -96,6 +92,7 @@
         "id": "counter",
         "kind": "stock",
         "label": "Analysts use the tool and hiring stays on schedule",
+        "shortLabel": "Hiring holds steady",
         "reason": "Teams augment analysts instead of replacing them — the feared exposure never materializes.",
         "returnPct": 10,
         "expected": {
@@ -114,16 +111,6 @@
     "id": "car",
     "title": "Buying a gas car for commuting",
     "samplePrompt": "I'm buying a gas car for my commute. Can an energy stock cushion a fuel-price spike?",
-    "keywords": [
-      "gas car",
-      "commute",
-      "fuel",
-      "gasoline",
-      "pump",
-      "energy stock",
-      "mpg",
-      "car"
-    ],
     "followUp": {
       "question": "How many miles will you drive this year, and what mileage does the car get?",
       "kind": "fields",
@@ -193,6 +180,7 @@
         "id": "supply",
         "kind": "stock",
         "label": "Fuel supply tightens and the refiner's margins expand",
+        "shortLabel": "Fuel supply tightens",
         "reason": "Tighter product supply widens refining margins, so the refiner's stock rises with the driver's fuel costs.",
         "returnPct": 15,
         "expected": {
@@ -205,6 +193,7 @@
         "id": "local-charge",
         "kind": "stock",
         "label": "A local charge raises the same pump price and the stock ends flat",
+        "shortLabel": "Local fees rise",
         "reason": "Taxes and local charges raise the pump price without touching refining margins — the driver pays more but the refiner gains nothing.",
         "returnPct": 0,
         "expected": {
@@ -220,27 +209,18 @@
     "id": "yen",
     "title": "Tuition billed in yen for a semester in Japan",
     "samplePrompt": "I'm committing to a semester in Japan. What if the yen rises before tuition is due?",
-    "keywords": [
-      "japan",
-      "yen",
-      "tuition",
-      "semester abroad",
-      "study abroad",
-      "exchange rate",
-      "currency"
-    ],
     "followUp": {
       "question": "Is the bill fixed in yen or in US dollars?",
       "kind": "choice",
       "options": [
         {
           "id": "yen-invoice",
-          "label": "Fixed in yen (¥600,000 due)",
+          "label": "Fixed in yen",
           "supported": true
         },
         {
           "id": "usd-invoice",
-          "label": "Fixed in US dollars ($4,000)",
+          "label": "Fixed in US dollars",
           "supported": true
         }
       ]
@@ -298,6 +278,7 @@
         "id": "shares-fall",
         "kind": "stock",
         "label": "Yen strengthens and Toyota shares fall in dollar terms",
+        "shortLabel": "Shares fall",
         "reason": "A stronger yen squeezes an exporter's overseas earnings when converted back — the stock falls in USD terms.",
         "returnPct": -10,
         "expected": {
@@ -311,6 +292,7 @@
         "id": "shares-rise",
         "kind": "stock",
         "label": "Same currency move and strong vehicle sales lift the shares",
+        "shortLabel": "Shares rise",
         "reason": "Vehicle demand outweighs the currency drag — the stock rises even as the yen bill grows.",
         "returnPct": 8,
         "expected": {
@@ -323,6 +305,7 @@
         "id": "hold-yen",
         "kind": "yen-cash",
         "label": "Convert $1,000 to yen now and hold until tuition is due",
+        "shortLabel": "Yen exchange rate",
         "reason": "Directly holding the currency you owe removes the mismatch — the gain is calculated from the two exchange rates, not assumed.",
         "returnPct": "calculated",
         "expected": {

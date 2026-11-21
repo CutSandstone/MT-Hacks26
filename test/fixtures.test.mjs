@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CASES, CUSTOM_CASES, ASSUMPTIONS, SCOPE_MESSAGE } from '../src/fixtures.js';
+import { CASES, CUSTOM_CASES, ASSUMPTIONS } from '../src/fixtures.js';
 
 const near = (a, b) => Math.abs(a - b) <= 0.005;
 
@@ -13,7 +13,6 @@ test('every case has the required structure', () => {
   for (const c of CASES) {
     assert.ok(c.samplePrompt && typeof c.samplePrompt === 'string', `${c.id} samplePrompt`);
     assert.ok(c.followUp && typeof c.followUp.question === 'string', `${c.id} followUp`);
-    assert.ok(Array.isArray(c.keywords) && c.keywords.length > 0, `${c.id} keywords`);
     assert.ok(c.company && c.company.name && c.company.ticker, `${c.id} company`);
     assert.ok(Array.isArray(c.company.sources) && c.company.sources.length >= 1, `${c.id} sources`);
     for (const s of c.company.sources) {
@@ -31,9 +30,8 @@ test('every case has the required structure', () => {
   }
 });
 
-test('ASSUMPTIONS and SCOPE_MESSAGE are populated', () => {
+test('ASSUMPTIONS are populated', () => {
   assert.ok(Array.isArray(ASSUMPTIONS) && ASSUMPTIONS.length >= 4);
-  assert.ok(typeof SCOPE_MESSAGE === 'string' && SCOPE_MESSAGE.length > 0);
 });
 
 test('scenario expected values match engine math at default inputs', async () => {
@@ -45,7 +43,7 @@ test('scenario expected values match engine math at default inputs', async () =>
     for (const sc of c.scenarios) {
       const inp = { ...defaults, ...(sc.impactOverride || {}) };
       let impact;
-      if (c.impactType === 'career') impact = careerImpact(inp.extraMonths, inp.monthlyEarningsDiff);
+      if (c.impactType === 'career') impact = careerImpact(inp.extraMonths, inp.cyberMonthlyPay - inp.alternativeMonthlyPay);
       else if (c.impactType === 'commute') impact = commutingImpact(inp.annualMiles, inp.mpg, inp.budgetPrice, inp.scenarioPrice);
       else if (c.impactType === 'tuition-yen') impact = tuitionImpactYen(inp.yenDue, inp.budgetRate, inp.scenarioRate);
       else assert.fail(`unknown impactType ${c.impactType}`);

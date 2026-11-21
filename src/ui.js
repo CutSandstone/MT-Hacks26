@@ -38,7 +38,7 @@ export function outcomeText(classification) {
 export function fieldHTML({ name, label, unit, value, error }) {
   return `<div class="field">
     <label for="f-${esc(name)}">${esc(label)}${unit ? ` <span class="unit">(${esc(unit)})</span>` : ''}</label>
-    <input id="f-${esc(name)}" data-field="${esc(name)}" type="number" step="any" value="${esc(value)}" class="${error ? 'invalid' : ''}">
-    ${error ? `<div class="error">${esc(error)}</div>` : ''}
+    <input id="f-${esc(name)}" data-field="${esc(name)}" type="number" step="any" inputmode="decimal" value="${esc(value)}" class="${error ? 'invalid' : ''}"${error ? ` aria-invalid="true" aria-describedby="error-${esc(name)}"` : ''}>
+    ${error ? `<div class="error" id="error-${esc(name)}">${esc(error)}</div>` : ''}
   </div>`;
 }
