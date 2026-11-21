@@ -1,0 +1,10 @@
+{
+  "name": "what-would-hedge-this",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\" && python3 -m unittest discover -s test -p 'test_*.py'",
+    "start": "python3 server.py"
+  }
+}

@@ -1,0 +1,336 @@
+[
+  {
+    "id": "cyber",
+    "title": "Entering cybersecurity after a CS degree",
+    "samplePrompt": "I'm majoring in CS and want to work in cybersecurity. What if AI changes the entry-level jobs?",
+    "keywords": [
+      "cybersecurity",
+      "cyber",
+      "computer science",
+      "cs major",
+      "cs",
+      "soc",
+      "security analyst",
+      "ai",
+      "entry-level job",
+      "entry level"
+    ],
+    "followUp": {
+      "question": "Which work are you aiming for?",
+      "kind": "choice",
+      "options": [
+        {
+          "id": "soc",
+          "label": "Security operations center (SOC) analyst who reviews alerts",
+          "supported": true
+        },
+        {
+          "id": "other-cs",
+          "label": "A different CS career",
+          "supported": false
+        }
+      ],
+      "unsupportedNote": "This matcher supports the SOC analyst example. Please choose it to see the company match."
+    },
+    "period": "First year after graduation",
+    "riskSummary": "Months of delayed paid work — each extra month costs $1,500 vs. fallback work.",
+    "impactType": "career",
+    "inputs": [
+      {
+        "name": "extraMonths",
+        "label": "Extra months until first paid work",
+        "default": 2,
+        "unit": "months"
+      },
+      {
+        "name": "monthlyEarningsDiff",
+        "label": "Monthly earnings difference vs. fallback work",
+        "default": 1500,
+        "unit": "$/month"
+      }
+    ],
+    "company": {
+      "name": "Palo Alto Networks",
+      "ticker": "PANW",
+      "fact": "Its Cortex XSIAM product automates parts of security operations, and the company describes analysts using it for alert handling and investigations.",
+      "caveat": "Those facts also support a competing explanation: a team could adopt the tool and keep its junior analysts. The career outcome and the investment outcome each need their own assumption.",
+      "sources": [
+        {
+          "label": "Cortex XSIAM overview",
+          "url": "https://www.paloaltonetworks.com/resources/datasheets/cortex-xsiam-aag"
+        },
+        {
+          "label": "XSIAM analyst role",
+          "url": "https://www.paloaltonetworks.com/services/education/palo-alto-networks-xsiam-analyst"
+        }
+      ]
+    },
+    "defaultPosition": 1000,
+    "scenarios": [
+      {
+        "id": "automate",
+        "kind": "stock",
+        "label": "Employers automate some junior work and the vendor gains customers",
+        "reason": "Adoption of the vendor's automation platform grows revenue faster than the hiring slowdown hurts it.",
+        "returnPct": 20,
+        "expected": {
+          "impact": -3000,
+          "gain": 200,
+          "combined": -2800
+        }
+      },
+      {
+        "id": "freeze",
+        "kind": "stock",
+        "label": "A spending freeze slows both hiring and software sales",
+        "reason": "The same macro slowdown that delays hiring also cuts the vendor's sales — the stock falls with the risk.",
+        "returnPct": -20,
+        "expected": {
+          "impact": -3000,
+          "gain": -200,
+          "combined": -3200
+        },
+        "isFailure": true
+      },
+      {
+        "id": "counter",
+        "kind": "stock",
+        "label": "Analysts use the tool and hiring stays on schedule",
+        "reason": "Teams augment analysts instead of replacing them — the feared exposure never materializes.",
+        "returnPct": 10,
+        "expected": {
+          "impact": 0,
+          "gain": 100,
+          "combined": 100
+        },
+        "isCounter": true,
+        "impactOverride": {
+          "extraMonths": 0
+        }
+      }
+    ]
+  },
+  {
+    "id": "car",
+    "title": "Buying a gas car for commuting",
+    "samplePrompt": "I'm buying a gas car for my commute. Can an energy stock cushion a fuel-price spike?",
+    "keywords": [
+      "gas car",
+      "commute",
+      "fuel",
+      "gasoline",
+      "pump",
+      "energy stock",
+      "mpg",
+      "car"
+    ],
+    "followUp": {
+      "question": "How many miles will you drive this year, and what mileage does the car get?",
+      "kind": "fields",
+      "inputs": [
+        {
+          "name": "annualMiles",
+          "label": "Miles this year",
+          "default": 12000,
+          "unit": "miles"
+        },
+        {
+          "name": "mpg",
+          "label": "Fuel economy",
+          "default": 30,
+          "unit": "mpg"
+        }
+      ]
+    },
+    "period": "The next year of commuting",
+    "riskSummary": "Extra dollars spent at the pump if fuel averages above the budgeted price.",
+    "impactType": "commute",
+    "inputs": [
+      {
+        "name": "annualMiles",
+        "label": "Miles this year",
+        "default": 12000,
+        "unit": "miles"
+      },
+      {
+        "name": "mpg",
+        "label": "Fuel economy",
+        "default": 30,
+        "unit": "mpg"
+      },
+      {
+        "name": "budgetPrice",
+        "label": "Budgeted fuel price",
+        "default": 3.5,
+        "unit": "$/gal"
+      },
+      {
+        "name": "scenarioPrice",
+        "label": "Scenario fuel price",
+        "default": 4.5,
+        "unit": "$/gal"
+      }
+    ],
+    "company": {
+      "name": "Valero",
+      "ticker": "VLO",
+      "fact": "Its refining margin depends on the prices of the products it sells and the inputs it buys.",
+      "caveat": "A commuter's pump price also includes taxes, distribution, and retail costs. A price increase caused by a local charge can affect the driver without improving the refiner's margin.",
+      "sources": [
+        {
+          "label": "Valero annual report, refining segment",
+          "url": "https://s23.q4cdn.com/587626645/files/doc_financials/2026/ar/ARS.pdf"
+        },
+        {
+          "label": "EIA breakdown of gasoline prices",
+          "url": "https://www.eia.gov/energyexplained/gasoline/factors-affecting-gasoline-prices.php"
+        }
+      ]
+    },
+    "defaultPosition": 1000,
+    "scenarios": [
+      {
+        "id": "supply",
+        "kind": "stock",
+        "label": "Fuel supply tightens and the refiner's margins expand",
+        "reason": "Tighter product supply widens refining margins, so the refiner's stock rises with the driver's fuel costs.",
+        "returnPct": 15,
+        "expected": {
+          "impact": -400,
+          "gain": 150,
+          "combined": -250
+        }
+      },
+      {
+        "id": "local-charge",
+        "kind": "stock",
+        "label": "A local charge raises the same pump price and the stock ends flat",
+        "reason": "Taxes and local charges raise the pump price without touching refining margins — the driver pays more but the refiner gains nothing.",
+        "returnPct": 0,
+        "expected": {
+          "impact": -400,
+          "gain": 0,
+          "combined": -400
+        },
+        "isFailure": true
+      }
+    ]
+  },
+  {
+    "id": "yen",
+    "title": "Tuition billed in yen for a semester in Japan",
+    "samplePrompt": "I'm committing to a semester in Japan. What if the yen rises before tuition is due?",
+    "keywords": [
+      "japan",
+      "yen",
+      "tuition",
+      "semester abroad",
+      "study abroad",
+      "exchange rate",
+      "currency"
+    ],
+    "followUp": {
+      "question": "Is the bill fixed in yen or in US dollars?",
+      "kind": "choice",
+      "options": [
+        {
+          "id": "yen-invoice",
+          "label": "Fixed in yen (¥600,000 due)",
+          "supported": true
+        },
+        {
+          "id": "usd-invoice",
+          "label": "Fixed in US dollars ($4,000)",
+          "supported": true
+        }
+      ]
+    },
+    "period": "Six months until tuition is due",
+    "riskSummary": "Change in the dollar cost of a future yen bill if the exchange rate moves.",
+    "fixedMode": {
+      "message": "Your tuition is already fixed in dollars — there is no currency exposure to hedge.",
+      "note": "Cash held in yen can still change value. This example assumes no conversion fees or interest.",
+      "inputs": [
+        {
+          "name": "fixedBillUsd",
+          "label": "Fixed tuition bill",
+          "default": 4000,
+          "unit": "$"
+        }
+      ]
+    },
+    "impactType": "tuition-yen",
+    "inputs": [
+      {
+        "name": "yenDue",
+        "label": "Tuition due",
+        "default": 600000,
+        "unit": "¥"
+      },
+      {
+        "name": "budgetRate",
+        "label": "Budgeted exchange rate",
+        "default": 150,
+        "unit": "yen per US dollar"
+      },
+      {
+        "name": "scenarioRate",
+        "label": "Scenario exchange rate",
+        "default": 125,
+        "unit": "yen per US dollar"
+      }
+    ],
+    "company": {
+      "name": "Toyota",
+      "ticker": "TM",
+      "fact": "Its filing explains how exchange rates affect its global business.",
+      "caveat": "Owning a Japanese business is not the same as owning the currency you will owe — compare against holding yen directly.",
+      "sources": [
+        {
+          "label": "Toyota annual filing, foreign currency fluctuations",
+          "url": "https://global.toyota/pages/global_toyota/ir/library/sec/20-F_202503_final.pdf"
+        }
+      ]
+    },
+    "defaultPosition": 1000,
+    "scenarios": [
+      {
+        "id": "shares-fall",
+        "kind": "stock",
+        "label": "Yen strengthens and Toyota shares fall in dollar terms",
+        "reason": "A stronger yen squeezes an exporter's overseas earnings when converted back — the stock falls in USD terms.",
+        "returnPct": -10,
+        "expected": {
+          "impact": -800,
+          "gain": -100,
+          "combined": -900
+        },
+        "isFailure": true
+      },
+      {
+        "id": "shares-rise",
+        "kind": "stock",
+        "label": "Same currency move and strong vehicle sales lift the shares",
+        "reason": "Vehicle demand outweighs the currency drag — the stock rises even as the yen bill grows.",
+        "returnPct": 8,
+        "expected": {
+          "impact": -800,
+          "gain": 80,
+          "combined": -720
+        }
+      },
+      {
+        "id": "hold-yen",
+        "kind": "yen-cash",
+        "label": "Convert $1,000 to yen now and hold until tuition is due",
+        "reason": "Directly holding the currency you owe removes the mismatch — the gain is calculated from the two exchange rates, not assumed.",
+        "returnPct": "calculated",
+        "expected": {
+          "impact": -800,
+          "gain": 200,
+          "combined": -600
+        }
+      }
+    ]
+  }
+]
