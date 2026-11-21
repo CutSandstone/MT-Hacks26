@@ -1,0 +1,13 @@
+{
+  "name": "wwht-demo-video-source",
+  "private": true,
+  "description": "Generation sources for the What Would Hedge This? demo video",
+  "scripts": {
+    "capture": "node record.cjs",
+    "shots": "node shots.cjs",
+    "render": "python3 render.py"
+  },
+  "devDependencies": {
+    "playwright": "1.64.0"
+  }
+}

@@ -1,0 +1,1 @@
+These are scenarios, not forecasts. We assign no odds, assume zero interest and conversion fees, and model no borrowing. The math runs in the browser; there are no account links, trades, or personalized buy lists. To limit excessive uncertainty, we show the assumptions and decline to suggest a hedge when the modeled link is unreliable. It's not a religious certification.

@@ -1,0 +1,1 @@
+What works today: three guided scenarios and a dollar-by-dollar comparison. Next: test with students, add exchange fees and spreads, and check whether people can tell what risk remains. My answer to my friend changed: don't start with what you could buy. Start with what you could lose.

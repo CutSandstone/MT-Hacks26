@@ -1,0 +1,1 @@
+A friend asked me, "I'm studying computer science. What if AI takes the job I'm studying for?" My first answer sounded clever: buy AI stocks. If software jobs disappear, maybe the companies selling the technology make money. But I couldn't answer the next question: how many dollars would that actually cover? That's why we built What Would Hedge This.

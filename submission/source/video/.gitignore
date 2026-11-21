@@ -1,0 +1,5 @@
+out/
+slides/*.png
+raw/regenerated*
+__pycache__/
+node_modules/

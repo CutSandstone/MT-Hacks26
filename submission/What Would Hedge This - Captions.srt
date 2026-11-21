@@ -1,0 +1,91 @@
+1
+00:00:00,400 --> 00:00:03,291
+A friend asked me, "I'm studying computer science.
+
+2
+00:00:03,291 --> 00:00:06,543
+What if AI takes the job I'm studying for?"
+
+3
+00:00:06,543 --> 00:00:09,434
+My first answer sounded clever: buy AI stocks.
+
+4
+00:00:09,434 --> 00:00:13,770
+If software jobs disappear, maybe the companies selling the technology make money.
+
+5
+00:00:13,770 --> 00:00:18,829
+But I couldn't answer the next question: how many dollars would that actually cover?
+
+6
+00:00:18,829 --> 00:00:21,720
+That's why we built What Would Hedge This.
+
+7
+00:00:22,070 --> 00:00:25,098
+Now let's try a risk we can actually match.
+
+8
+00:00:25,098 --> 00:00:31,491
+This student owes six hundred thousand yen. At a hundred and fifty yen per dollar, that's four thousand dollars.
+
+9
+00:00:31,491 --> 00:00:36,537
+If the rate moves to a hundred and twenty-five, the same bill costs forty-eight hundred.
+
+10
+00:00:36,537 --> 00:00:38,556
+Doing nothing leaves an eight-hundred-dollar shortfall.
+
+11
+00:00:39,106 --> 00:00:45,698
+In the demo, convert a thousand dollars at the budget rate and you have a hundred and fifty thousand yen.
+
+12
+00:00:45,698 --> 00:00:51,631
+At the stress rate, that yen is worth twelve hundred dollars, cushioning two hundred of the eight-hundred-dollar hit.
+
+13
+00:00:51,631 --> 00:00:54,597
+The matrix shows the six hundred dollars still uncovered.
+
+14
+00:00:54,597 --> 00:00:59,211
+Change the amount to two thousand and the remaining hit drops to four hundred.
+
+15
+00:00:59,211 --> 00:01:02,837
+If the exchange rate stays put, the model shows no difference.
+
+16
+00:01:03,387 --> 00:01:10,534
+These are scenarios, not forecasts. We assign no odds, assume zero interest and conversion fees, and model no borrowing.
+
+17
+00:01:10,534 --> 00:01:16,553
+The math runs in the browser; there are no account links, trades, or personalized buy lists.
+
+18
+00:01:16,553 --> 00:01:24,076
+To limit excessive uncertainty, we show the assumptions and decline to suggest a hedge when the modeled link is unreliable.
+
+19
+00:01:24,076 --> 00:01:25,957
+It's not a religious certification.
+
+20
+00:01:26,507 --> 00:01:30,598
+What works today: three guided scenarios and a dollar-by-dollar comparison.
+
+21
+00:01:30,598 --> 00:01:37,963
+Next: test with students, add exchange fees and spreads, and check whether people can tell what risk remains.
+
+22
+00:01:37,963 --> 00:01:43,282
+My answer to my friend changed: don't start with what you could buy.
+
+23
+00:01:43,282 --> 00:01:45,737
+Start with what you could lose.
